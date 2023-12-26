@@ -36,6 +36,18 @@ function Component() {
 useState의 인수로 특정한 값을 넘기는 함수를 인수로 넣어줄 수도 있다. 이것을 게으른 초기화라고 한다.
 게으른 초기화 함수는 오로지 state가 처음 만들어질 때만 사용된다. 만약 이후 리렌더링이 발생된다면 이 함수의 실행은 무시된다.
 
+```jsx
+import { useState } from 'react'
+
+export default function App() {
+    const [state, setState] = useState(() => {
+        console.log('I'm 복잡한 연산예요')
+        return 0
+    })
+}
+/*...*/
+```
+
 만약 `Number.parseInt(window.localStorage.getItem(cacheKey))`와 같이 한 번 실행되는 데 어느정도 비용이 드는 값이 있다고 가정해보자. useState의 인수로 이 값 자첼 사용한다면 매번 렌더링 시 해당 값에 접근해서 낭비가 발생한다. 따라서 이런 경우 함수 형태로 인수에 넘겨주는 것이 경제적이다. **초기값이 없다면 함수를 실행해 무거운 연산을 시도할 것이고, 이미 초기값이 존재한다면 함수 실행을 하지 않고 기존 값을 사용할 것이다.**
 
 - 게으른 초기화 쓰는 경우 : 무거운 연산이 요구될 때 사용
