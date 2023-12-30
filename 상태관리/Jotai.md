@@ -304,3 +304,96 @@ export default function App() {
   - 키를 추상화해 사용자가 키를 관리할 필요가 없다. Jotai가 별도의 문자열 키가 없이도 각 값들을 관리할 수 있는 것은 객체의 참조를 통해 값을 관리하기 때문이다. 객체의 참조를 WeakMap에 보관해 해당 객체 자체가 변경되지 않는 한 별도의 키가 없이도 객체의 참조를 통해 값을 관리할 수 있다.
   - selector없이도 Atom만으로 atom값에서 또 다른 파생된 상태를 만들 수 있다.
   - 타입스크립트로 작성돼 있어 타입을 잘 지원한다.
+
+## custom atom
+
+jotai에서 atom 함수를 사용해 새로운 custom atom을 만드는 것은 Jotai의 핵심 기능 중 하나이다. 이 함수는 두 개의 인자를 받을 수 있으며, 각 인자는 아톰의 read, write 연산을 정의한다.
+
+1. read 함수
+   첫 번째 인자는 read함수로 아톰의 현재 값을 얻는 방법을 정의한다.
+
+```jsx
+(get) => {
+  // 여기서의 로직은 아톰의 값을 읽을 때 수행됩니다.
+};
+```
+
+- get: 다른 아톰의 값을 읽을 수 있는 함수입니다. 이 함수를 통해 현재 아톰이 의존하는 다른 아톰의 값을 가져올 수 있다.
+
+2. write 함수
+   두 번째 인자는 선택적으로 제공되며, 쓰기 함수로 아톰의 값을 업데이트하는 방법을 정의한다.
+
+```jsx
+(get, set, update) => {
+  // 여기서의 로직은 아톰의 값을 업데이트할 때 수행됩니다.
+};
+```
+
+- get: 읽기 함수와 동일하게 다른 아톰의 값을 읽는 데 사용된다
+- set: 다른 아톰의 값을 설정하는 데 사용된다. 이 함수를 사용하여 현재 아톰 또는 다른 아톰의 값을 업데이트할 수 있다.
+- update: 아톰을 업데이트할 때 제공되는 값 또는 업데이트 함수이다. 이 값은 아톰의 새로운 상태를 결정하는 데 사용된다.
+
+### 예제 : 비동기 데이터 로딩 처리하는 Jotai custom atom
+
+- 비동기 데이터 로딩 atom
+
+```tsx
+import { atom } from 'jotai';
+
+// Promise<T>를 반환하는 함수 정의, T는 비동기적으로 로드되는 데이터의 타입
+type ReturnPromise<T> = () => Promise<T>;
+
+// 비동기 데이터 로딩 상태를 관리하는 아톰 타입
+interface AsyncData<T> {
+  loading: boolean; // 로딩중인지
+  data?: T; // 로딩된 데이터
+  error?: Error; // 발생한 오류
+}
+
+// 사용자 정의 아톰 생성 함수
+export function createAsyncDataAtom<T>(
+  promiseData: ReturnPromise<T>,
+): Atom<AsyncData<T>> {
+  // 초기 상태를 갖는 아톰, 처음에는 데이터가 없고 로딩중임
+  const dataAtom = atom<AsyncData<T>>({
+    loading: true,
+    data: undefined,
+    error: undefined,
+  });
+
+  // 실제로 데이터를 로드하는 아톰, 데이터 로딩을 시도하고 성공하거나 실패할 경우 dataAtom의 상태를 업데이트함
+  const loadAtom = atom(null, async (get, set) => {
+    set(dataAtom, { loading: true, data: undefined, error: undefined });
+    try {
+      const data = await promiseData();
+      set(dataAtom, { loading: false, data, error: undefined });
+    } catch (error) {
+      set(dataAtom, { loading: false, data: undefined, error });
+    }
+  });
+
+  // 최종 반환되는 아톰은 loadAtom을 호출하여 데이터 로딩을 시작하고, 현재의 dataAtom상태를 반환
+  return atom((get) => {
+    get(loadAtom); // 데이터 로딩 시작
+    return get(dataAtom); // 현재 상태 반환
+  });
+}
+
+// 사용 예시
+const userAtom = createAsyncDataAtom(async () => {
+  const response = await fetch('/api/user');
+  return await response.json();
+});
+```
+
+- 사용 방법 : 해당 atom을 사용하는 React component
+
+```tsx
+const UserComponent: React.FC = () => {
+  const [{ loading, data, error }] = useAtom(userAtom);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+  return <div>User: {data?.name}</div>;
+};
+```
